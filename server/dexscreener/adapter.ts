@@ -222,6 +222,13 @@ export class DexScreenerAdapter {
         return null;
       }
 
+      // Sort eligible pairs by USD liquidity descending to always pick the primary market pool
+      eligiblePairs.sort((a, b) => {
+        const liqA = Number(a.liquidity?.usd) || 0;
+        const liqB = Number(b.liquidity?.usd) || 0;
+        return liqB - liqA;
+      });
+
       // Find best eligible pair:
       // Must have priceUsd. Prefer where token is baseToken and highest liquidity.
       let bestPair = eligiblePairs.find((p) => {

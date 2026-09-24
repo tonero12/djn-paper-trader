@@ -552,7 +552,10 @@ bot.on('callback_query:data', async (ctx) => {
   }
 
   if (data === 'cx') {
-    await ctx.reply('❌ Action cancelled.', { reply_markup: getMainMenuKeyboard() });
+    try {
+      await ctx.editMessageText('❌ <i>Order cancelled.</i>', { parse_mode: 'HTML' });
+    } catch {}
+    await ctx.reply('🏠 <b>Main Menu:</b>', { parse_mode: 'HTML', reply_markup: getMainMenuKeyboard() });
     return;
   }
 });
@@ -940,7 +943,12 @@ async function handleSharePnlCard(ctx: any, positionId: string) {
   try {
     const user = await storage.getUser(telegramId);
     const session = await storage.getActiveSession(telegramId);
-    const position = await storage.getPosition(positionId);
+
+    let position = await storage.getPosition(positionId);
+    if (!position || String(position.telegramId) !== String(telegramId)) {
+      const userPositions = await storage.getAllPositions(telegramId);
+      position = userPositions.find(p => p.positionId === positionId) || null;
+    }
 
     if (!user || !session || !position) {
       throw new Error('Position or user session not found.');
@@ -952,12 +960,14 @@ async function handleSharePnlCard(ctx: any, positionId: string) {
 
     const cardScope = isClosed ? 'closed' : isPartiallyClosed ? 'partially_closed' : 'open';
     const pnlUsd = isClosed ? position.totalRealisedPnl : valuation.unrealisedPnlUsd;
+    const costBasis = D(position.totalCostBasisBought);
     const pnlPercent = isClosed
-      ? D(position.totalRealisedPnl).dividedBy(D(position.totalCostBasisBought)).times(100).toString()
+      ? (costBasis.gt(0) ? D(position.totalRealisedPnl).dividedBy(costBasis).times(100).toString() : '0.00')
       : valuation.unrealisedPnlPercent;
 
+    const qtySold = D(position.totalQuantitySold);
     const currentOrExit = isClosed
-      ? D(position.totalRealisedProceeds).dividedBy(D(position.totalQuantitySold)).toString()
+      ? (qtySold.gt(0) ? D(position.totalRealisedProceeds).dividedBy(qtySold).toString() : position.averageEntryPrice)
       : valuation.currentPriceUsd;
 
     const cardId = `card_${telegramId}_${Date.now()}`;
@@ -1181,6 +1191,9 @@ async function handleHelpView(ctx: any, isEdit: boolean = false) {
 /start - Open bot and verify starting balance
 /buy - Paste token address to buy
 /positions - View open positions and sell
+/sell - Quick sell menu for open positions
+/pnl - Generate high-res P&L card for any token
+/portfolio - View portfolio and active trades
 /balance - Portfolio balance and cash equity
 /history - Recent trade fills
 /performance - Win-rate, total P&L, best/worst trades
