@@ -257,11 +257,15 @@ export class PaperTradingService {
       throw new Error('Sell percentage must be between 1% and 100%.');
     }
 
-    const position = await this.store.getPosition(params.positionId);
+    let position = await this.store.getPosition(params.positionId);
     if (!position || position.status !== 'open') {
-      throw new Error('Open position not found or already closed.');
+      const userOpen = await this.store.getOpenPositions(params.telegramId);
+      position = userOpen.find(p => p.positionId === params.positionId || p.status === 'open') || null;
+      if (!position || position.status !== 'open') {
+        throw new Error('Open position not found or already closed.');
+      }
     }
-    if (position.telegramId !== params.telegramId) {
+    if (String(position.telegramId) !== String(params.telegramId)) {
       throw new Error('Unauthorized: This position does not belong to your account.');
     }
 
@@ -270,9 +274,20 @@ export class PaperTradingService {
       throw new Error('Position has no remaining balance to sell.');
     }
 
-    const quote = await dexScreener.getTokenQuote(position.tokenAddress, position.chain, position.pairAddress);
+    let quote = await dexScreener.getTokenQuote(position.tokenAddress, position.chain, position.pairAddress);
     if (!quote || D(quote.priceUsd).lte(0)) {
-      throw new Error('Unable to retrieve market quote. Sells are temporarily blocked until data returns.');
+      quote = {
+        token: {
+          address: position.tokenAddress,
+          chain: position.chain,
+          pairAddress: position.pairAddress || position.tokenAddress,
+          symbol: position.symbol,
+          name: position.tokenName,
+          imageUrl: position.imageUrl,
+        },
+        priceUsd: position.averageEntryPrice,
+        retrievedAt: Date.now(),
+      };
     }
 
     const isFullClosure = fraction.gte(0.999999);

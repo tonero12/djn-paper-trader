@@ -599,7 +599,7 @@ class InMemoryStorage implements IStorage {
     }
 
     const position = this.positions.get(params.positionId);
-    if (!position || position.status !== 'open' || position.sessionId !== params.sessionId) {
+    if (!position || position.status !== 'open' || String(position.telegramId) !== String(params.telegramId)) {
       throw new Error('Open position not found or already closed.');
     }
 
@@ -1165,8 +1165,8 @@ class GoogleCloudFirestoreStorage implements IStorage {
       const posSnap = await t.get(posRef);
       if (!posSnap.exists) throw new Error('Position not found.');
       const position = posSnap.data() as Position;
-      if (position.status !== 'open' || position.sessionId !== params.sessionId) {
-        throw new Error('Position already closed or not belonging to this session.');
+      if (position.status !== 'open' || String(position.telegramId) !== String(params.telegramId)) {
+        throw new Error('Position already closed or not found.');
       }
 
       const remainingQty = D(position.remainingQuantity);

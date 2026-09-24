@@ -708,7 +708,10 @@ async function handleConfirmBuy(ctx: any, intentId: string) {
 `.trim();
 
     const kb = new InlineKeyboard()
-      .text('📊 View Position', `p:${position.positionId}`)
+      .text('🔴 Sell 100%', `sp:1.00:${position.positionId}`)
+      .text('🟡 Sell 50%', `sp:0.50:${position.positionId}`)
+      .row()
+      .text('📊 Position Details', `p:${position.positionId}`)
       .text('🖼️ Share P&L Card', `card:${position.positionId}`)
       .row()
       .text('🔙 Main Menu', 'm:menu');
@@ -761,7 +764,10 @@ async function handlePositionsView(ctx: any, isEdit: boolean = false) {
     text += `• Avg Entry: <code>${formatPrice(pos.averageEntryPrice)}</code> | Cur: <code>${formatPrice(valuation.currentPriceUsd)}</code>\n`;
     text += `• Value: <code>${formatUsd(valuation.markedMarketValueUsd)}</code> | Unrealised P&L: <b>${pnlUsd} (${pnlPct})</b>\n\n`;
 
-    kb.text(`Manage ${pos.symbol}`, `p:${pos.positionId}`).row();
+    kb.text(`🔴 Sell 100%`, `sp:1.00:${pos.positionId}`)
+      .text(`🟡 Sell 50%`, `sp:0.50:${pos.positionId}`)
+      .text(`🖼️ Card`, `card:${pos.positionId}`)
+      .row();
   }
 
   kb.text('🔄 Refresh Prices', 'm:pos').text('🔙 Main Menu', 'm:menu');
@@ -780,9 +786,14 @@ async function handlePositionsView(ctx: any, isEdit: boolean = false) {
 async function handleSinglePositionView(ctx: any, positionId: string, isEdit: boolean = false) {
   const telegramId = ctx.from.id;
   const user = await storage.getUser(telegramId);
-  const position = await storage.getPosition(positionId);
+  let position = await storage.getPosition(positionId);
 
-  if (!position || position.telegramId !== telegramId) {
+  if (!position || String(position.telegramId) !== String(telegramId)) {
+    const userOpenPositions = await storage.getOpenPositions(telegramId);
+    position = userOpenPositions.find((p) => p.positionId === positionId || p.status === 'open') || null;
+  }
+
+  if (!position || String(position.telegramId) !== String(telegramId)) {
     const text = '❌ Position not found or already closed.';
     const kb = new InlineKeyboard().text('📊 All Positions', 'm:pos').text('🔙 Main Menu', 'm:menu');
     if (isEdit) {
@@ -817,9 +828,9 @@ async function handleSinglePositionView(ctx: any, positionId: string, isEdit: bo
 `.trim();
 
   const kb = new InlineKeyboard()
+    .text('🔴 Sell 100%', `sp:1.00:${positionId}`)
+    .text('🟡 Sell 50%', `sp:0.50:${positionId}`)
     .text('Sell 25%', `sp:0.25:${positionId}`)
-    .text('Sell 50%', `sp:0.50:${positionId}`)
-    .text('Sell 100%', `sp:1.00:${positionId}`)
     .row()
     .text('🖼️ Share P&L Card', `card:${positionId}`)
     .text('🔄 Refresh', `p:${positionId}`)
