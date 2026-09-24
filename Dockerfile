@@ -4,6 +4,8 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
 
+RUN apk add --no-cache fontconfig ttf-dejavu font-noto
+
 COPY package*.json .npmrc* ./
 RUN npm install
 
@@ -12,6 +14,8 @@ RUN npm run build
 
 FROM node:22-alpine AS runner
 WORKDIR /app
+
+RUN apk add --no-cache fontconfig ttf-dejavu font-noto
 
 ENV NODE_ENV=production
 ENV PORT=3000

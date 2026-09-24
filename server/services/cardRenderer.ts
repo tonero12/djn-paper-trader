@@ -7,6 +7,7 @@ import sharp from 'sharp';
 import { PnlCardSnapshot, SupportedChain } from '../types.js';
 import { escapeXml, isSafeImageUrl } from '../utils/security.js';
 import { D, formatPercent, formatPrice, formatUsd } from '../utils/decimal.js';
+import { FONT_SANS_BOLD_BASE64, FONT_SANS_REGULAR_BASE64 } from '../assets/fontBase64.js';
 
 export interface GenerateCardParams {
   cardId: string;
@@ -73,8 +74,8 @@ export class CardRenderer {
       partialMetricsSvg = `
         <g transform="translate(80, 480)">
           <rect width="500" height="50" rx="8" fill="#1A1F26" />
-          <text x="20" y="32" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" fill="#94A3B8">REALISED P&amp;L: <tspan fill="#F8FAFC">${realised}</tspan></text>
-          <text x="260" y="32" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" fill="#94A3B8">UNREALISED: <tspan fill="${accentColor}">${unrealised}</tspan></text>
+          <text x="20" y="32" font-family="'DJNSans', 'Liberation Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="600" fill="#94A3B8">REALISED P&amp;L: <tspan fill="#F8FAFC">${realised}</tspan></text>
+          <text x="260" y="32" font-family="'DJNSans', 'Liberation Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="600" fill="#94A3B8">UNREALISED: <tspan fill="${accentColor}">${unrealised}</tspan></text>
         </g>
       `;
     }
@@ -84,6 +85,47 @@ export class CardRenderer {
     return `
 <svg width="1200" height="675" viewBox="0 0 1200 675" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
+    <style>
+      @font-face {
+        font-family: 'DJNSans';
+        src: url('data:font/truetype;charset=utf-8;base64,${FONT_SANS_REGULAR_BASE64}') format('truetype');
+        font-weight: 400;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'DJNSans';
+        src: url('data:font/truetype;charset=utf-8;base64,${FONT_SANS_REGULAR_BASE64}') format('truetype');
+        font-weight: 500;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'DJNSans';
+        src: url('data:font/truetype;charset=utf-8;base64,${FONT_SANS_REGULAR_BASE64}') format('truetype');
+        font-weight: 600;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'DJNSans';
+        src: url('data:font/truetype;charset=utf-8;base64,${FONT_SANS_BOLD_BASE64}') format('truetype');
+        font-weight: 700;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'DJNSans';
+        src: url('data:font/truetype;charset=utf-8;base64,${FONT_SANS_BOLD_BASE64}') format('truetype');
+        font-weight: 800;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'DJNSans';
+        src: url('data:font/truetype;charset=utf-8;base64,${FONT_SANS_BOLD_BASE64}') format('truetype');
+        font-weight: 900;
+        font-style: normal;
+      }
+      text {
+        font-family: 'DJNSans', 'Liberation Sans', 'DejaVu Sans', Arial, Helvetica, sans-serif;
+      }
+    </style>
     <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#0F1216" />
       <stop offset="100%" stop-color="#181D24" />
@@ -94,7 +136,7 @@ export class CardRenderer {
     </linearGradient>
     <radialGradient id="pnlGlow" cx="50%" cy="50%" r="50%">
       <stop offset="0%" stop-color="${accentColor}" stop-opacity="0.18" />
-      <stop offset="100%" stop-color="${accentColor}" stop-opacity="0" />
+      <stop offset="100%" stop-color="${accentColor}" stop-opacity="0.0" />
     </radialGradient>
   </defs>
 
@@ -111,34 +153,34 @@ export class CardRenderer {
   <g transform="translate(60, 60)">
     <!-- App Brand -->
     <rect width="44" height="44" rx="10" fill="#2563EB" />
-    <text x="12" y="30" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="900" fill="#FFFFFF">DJN</text>
-    <text x="58" y="25" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="800" fill="#F8FAFC" letter-spacing="-0.5">DJN PAPER TRADER</text>
-    <text x="58" y="42" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="600" fill="#64748B">MEMECOIN SIMULATOR</text>
+    <text x="12" y="30" font-family="'DJNSans', 'Liberation Sans', 'DejaVu Sans', Arial, sans-serif" font-size="20" font-weight="900" fill="#FFFFFF">DJN</text>
+    <text x="58" y="25" font-family="'DJNSans', 'Liberation Sans', 'DejaVu Sans', Arial, sans-serif" font-size="20" font-weight="800" fill="#F8FAFC" letter-spacing="-0.5">DJN PAPER TRADER</text>
+    <text x="58" y="42" font-family="'DJNSans', 'Liberation Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12" font-weight="600" fill="#64748B">MEMECOIN SIMULATOR</text>
 
     <!-- Simulated Funds Warning Badge -->
     <rect x="730" y="4" width="350" height="36" rx="18" fill="#F59E0B" fill-opacity="0.15" stroke="#F59E0B" stroke-width="1.5" />
-    <text x="905" y="27" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="800" fill="#FBBF24" text-anchor="middle" letter-spacing="1">PAPER TRADE • SIMULATED FUNDS</text>
+    <text x="905" y="27" font-family="'DJNSans', 'Liberation Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12" font-weight="800" fill="#FBBF24" text-anchor="middle" letter-spacing="1">PAPER TRADE • SIMULATED FUNDS</text>
   </g>
 
   <!-- Token Identity & Chain Tag -->
   <g transform="translate(60, 140)">
     <rect width="80" height="28" rx="6" fill="#1E293B" />
-    <text x="40" y="19" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="700" fill="#38BDF8" text-anchor="middle">${cleanChain}</text>
+    <text x="40" y="19" font-family="'DJNSans', 'Liberation Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12" font-weight="700" fill="#38BDF8" text-anchor="middle">${cleanChain}</text>
 
     <!-- Status Badge -->
     <rect x="90" y="0" width="160" height="28" rx="6" fill="${accentBgGlow}" stroke="${accentColor}" stroke-width="1" />
-    <text x="170" y="19" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="800" fill="${accentColor}" text-anchor="middle">${statusText}</text>
+    <text x="170" y="19" font-family="'DJNSans', 'Liberation Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12" font-weight="800" fill="${accentColor}" text-anchor="middle">${statusText}</text>
 
-    <text x="0" y="72" font-family="system-ui, -apple-system, sans-serif" font-size="44" font-weight="900" fill="#FFFFFF" letter-spacing="-1">${cleanSymbol}</text>
-    <text x="0" y="102" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="500" fill="#94A3B8">${cleanName}</text>
+    <text x="0" y="72" font-family="'DJNSans', 'Liberation Sans', 'DejaVu Sans', Arial, sans-serif" font-size="44" font-weight="900" fill="#FFFFFF" letter-spacing="-1">${cleanSymbol}</text>
+    <text x="0" y="102" font-family="'DJNSans', 'Liberation Sans', 'DejaVu Sans', Arial, sans-serif" font-size="18" font-weight="500" fill="#94A3B8">${cleanName}</text>
   </g>
 
   <!-- Massive Headline P&L -->
   <g transform="translate(60, 310)">
-    <text x="0" y="50" font-family="system-ui, -apple-system, sans-serif" font-size="78" font-weight="900" fill="${accentColor}" letter-spacing="-2">
+    <text x="0" y="50" font-family="'DJNSans', 'Liberation Sans', 'DejaVu Sans', Arial, sans-serif" font-size="78" font-weight="900" fill="${accentColor}" letter-spacing="-2">
       ${formattedPnlPercent}
     </text>
-    <text x="0" y="98" font-family="system-ui, -apple-system, sans-serif" font-size="32" font-weight="800" fill="${accentColor}" opacity="0.9">
+    <text x="0" y="98" font-family="'DJNSans', 'Liberation Sans', 'DejaVu Sans', Arial, sans-serif" font-size="32" font-weight="800" fill="${accentColor}" opacity="0.9">
       ${formattedPnlUsd}
     </text>
   </g>
@@ -147,20 +189,20 @@ export class CardRenderer {
   <g transform="translate(60, 460)">
     <!-- Cost Basis -->
     <g transform="translate(0, 0)">
-      <text x="0" y="0" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600" fill="#64748B" text-transform="uppercase" letter-spacing="0.5">Invested Cost Basis</text>
-      <text x="0" y="26" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="700" fill="#F1F5F9">${formatUsd(snapshot.investedCostBasisUsd)}</text>
+      <text x="0" y="0" font-family="'DJNSans', 'Liberation Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="600" fill="#64748B" text-transform="uppercase" letter-spacing="0.5">Invested Cost Basis</text>
+      <text x="0" y="26" font-family="'DJNSans', 'Liberation Sans', 'DejaVu Sans', Arial, sans-serif" font-size="20" font-weight="700" fill="#F1F5F9">${formatUsd(snapshot.investedCostBasisUsd)}</text>
     </g>
 
     <!-- Entry Price -->
     <g transform="translate(220, 0)">
-      <text x="0" y="0" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600" fill="#64748B" text-transform="uppercase" letter-spacing="0.5">Entry Price</text>
-      <text x="0" y="26" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="700" fill="#F1F5F9">${formatPrice(snapshot.entryPriceUsd)}</text>
+      <text x="0" y="0" font-family="'DJNSans', 'Liberation Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="600" fill="#64748B" text-transform="uppercase" letter-spacing="0.5">Entry Price</text>
+      <text x="0" y="26" font-family="'DJNSans', 'Liberation Sans', 'DejaVu Sans', Arial, sans-serif" font-size="20" font-weight="700" fill="#F1F5F9">${formatPrice(snapshot.entryPriceUsd)}</text>
     </g>
 
     <!-- Current / Exit Price -->
     <g transform="translate(440, 0)">
-      <text x="0" y="0" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600" fill="#64748B" text-transform="uppercase" letter-spacing="0.5">${priceLabel}</text>
-      <text x="0" y="26" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="700" fill="#F1F5F9">${formatPrice(snapshot.currentOrExitPriceUsd)}</text>
+      <text x="0" y="0" font-family="'DJNSans', 'Liberation Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="600" fill="#64748B" text-transform="uppercase" letter-spacing="0.5">${priceLabel}</text>
+      <text x="0" y="26" font-family="'DJNSans', 'Liberation Sans', 'DejaVu Sans', Arial, sans-serif" font-size="20" font-weight="700" fill="#F1F5F9">${formatPrice(snapshot.currentOrExitPriceUsd)}</text>
     </g>
   </g>
 
@@ -173,10 +215,10 @@ export class CardRenderer {
 
   <!-- Footer Info -->
   <g transform="translate(60, 600)">
-    <text x="0" y="0" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600" fill="#475569">
+    <text x="0" y="0" font-family="'DJNSans', 'Liberation Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="600" fill="#475569">
       Trader: <tspan fill="#94A3B8">${cleanDisplayName}</tspan> • Snapshot: <tspan fill="#94A3B8">${dateFormatted}</tspan>
     </text>
-    <text x="1080" y="0" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="700" fill="#475569" text-anchor="end">
+    <text x="1080" y="0" font-family="'DJNSans', 'Liberation Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="700" fill="#475569" text-anchor="end">
       djn-paper-trader.run.app
     </text>
   </g>
@@ -222,7 +264,7 @@ export class CardRenderer {
 
         <!-- Badge / Text -->
         <rect x="100" y="290" width="160" height="32" rx="16" fill="#0F172A" stroke="#475569" stroke-width="2" />
-        <text x="180" y="311" font-family="system-ui, sans-serif" font-size="13" font-weight="900" fill="#F8FAFC" text-anchor="middle">MUCH P&amp;L • DOGE</text>
+        <text x="180" y="311" font-family="'DJNSans', 'Liberation Sans', sans-serif" font-size="13" font-weight="900" fill="#F8FAFC" text-anchor="middle">MUCH P&amp;L • DOGE</text>
       </g>
       `;
     }
@@ -251,7 +293,7 @@ export class CardRenderer {
         <circle cx="180" cy="215" r="16" fill="none" stroke="#F59E0B" stroke-width="5" />
 
         <rect x="90" y="295" width="180" height="32" rx="16" fill="#0F172A" stroke="#475569" stroke-width="2" />
-        <text x="180" y="316" font-family="system-ui, sans-serif" font-size="13" font-weight="900" fill="#F8FAFC" text-anchor="middle">GIGA CHAD TRADER</text>
+        <text x="180" y="316" font-family="'DJNSans', 'Liberation Sans', sans-serif" font-size="13" font-weight="900" fill="#F8FAFC" text-anchor="middle">GIGA CHAD TRADER</text>
       </g>
       `;
     }
@@ -288,7 +330,7 @@ export class CardRenderer {
       }
 
       <rect x="110" y="295" width="140" height="32" rx="16" fill="#0F172A" stroke="#475569" stroke-width="2" />
-      <text x="180" y="316" font-family="system-ui, sans-serif" font-size="13" font-weight="900" fill="#F8FAFC" text-anchor="middle">PEPE HODL</text>
+      <text x="180" y="316" font-family="'DJNSans', 'Liberation Sans', sans-serif" font-size="13" font-weight="900" fill="#F8FAFC" text-anchor="middle">PEPE HODL</text>
     </g>
     `;
   }
