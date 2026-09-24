@@ -42,6 +42,12 @@ interface BotStatus {
     gcpProject: string;
     databaseId: string;
   };
+  pollingStatus?: {
+    isActive: boolean;
+    conflictDetected: boolean;
+    isPaused: boolean;
+    lastError: string | null;
+  };
 }
 
 interface AccountOverview {
@@ -107,6 +113,21 @@ export default function App() {
     navigator.clipboard.writeText(text);
     setCopiedKey(key);
     setTimeout(() => setCopiedKey(null), 2500);
+  };
+
+  const handleTogglePolling = async () => {
+    try {
+      const endpoint = status?.pollingStatus?.isPaused ? '/api/bot/resume-polling' : '/api/bot/pause-polling';
+      await fetch(endpoint, { method: 'POST' });
+      await fetchStatus();
+      setNotice(
+        status?.pollingStatus?.isPaused
+          ? '▶️ Local polling resumed.'
+          : '⏸️ Local bot polling paused. Your live 24/7 cloud bot (on Railway/Render) can now run completely uninterrupted!'
+      );
+    } catch (err: any) {
+      setNotice(`Error: ${err.message}`);
+    }
   };
 
   const handleGitPush = async (e: React.FormEvent) => {
@@ -980,27 +1001,59 @@ export default function App() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                      <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">
-                        Telegram Bot Connected & Polling
+                      <span
+                        className={`w-2.5 h-2.5 rounded-full ${
+                          status?.pollingStatus?.conflictDetected
+                            ? 'bg-blue-400 animate-pulse'
+                            : status?.pollingStatus?.isPaused
+                            ? 'bg-amber-400'
+                            : 'bg-emerald-400 animate-pulse'
+                        }`}
+                      />
+                      <span
+                        className={`text-xs font-semibold uppercase tracking-wider ${
+                          status?.pollingStatus?.conflictDetected
+                            ? 'text-blue-400'
+                            : status?.pollingStatus?.isPaused
+                            ? 'text-amber-400'
+                            : 'text-emerald-400'
+                        }`}
+                      >
+                        {status?.pollingStatus?.conflictDetected
+                          ? 'Live Cloud Instance Active (Railway/Render)'
+                          : status?.pollingStatus?.isPaused
+                          ? 'Local Polling Paused'
+                          : 'Telegram Bot Connected & Polling'}
                       </span>
                     </div>
                     <h2 className="text-xl font-bold text-white">
                       @{status.botInfo.username}
                     </h2>
                     <p className="text-xs text-slate-300 mt-1">
-                      Your bot is online, listening for updates, and using free public DEX Screener market data. Zero paid APIs needed.
+                      {status?.pollingStatus?.conflictDetected
+                        ? 'Your bot is running continuously in the cloud on Railway/Render. Local dev polling is standing by so Telegram delivers messages uninterrupted to your live server.'
+                        : 'Your bot is online, listening for updates, and using free public DEX Screener market data. Zero paid APIs needed.'}
                     </p>
                   </div>
 
-                  <a
-                    href={`https://t.me/${status.botInfo.username}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-5 py-3 rounded-xl shadow-lg transition text-sm whitespace-nowrap"
-                  >
-                    Open @{status.botInfo.username} in Telegram
-                  </a>
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    <button
+                      onClick={handleTogglePolling}
+                      className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2.5 rounded-xl transition font-medium border border-slate-700/80"
+                      title="Pause or resume local polling to avoid conflicts with your 24/7 cloud instance"
+                    >
+                      {status?.pollingStatus?.isPaused ? '▶️ Resume Local Polling' : '⏸️ Pause Local Polling'}
+                    </button>
+
+                    <a
+                      href={`https://t.me/${status.botInfo.username}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-5 py-2.5 rounded-xl shadow-lg transition text-sm whitespace-nowrap"
+                    >
+                      Open @{status.botInfo.username} in Telegram
+                    </a>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-emerald-800/30 text-xs">
@@ -1088,23 +1141,45 @@ TELEGRAM_BOT_TOKEN={status?.botConfigured ? '•••••••••••�
               <div>
                 <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Current Connection Mode</div>
                 <div className="text-lg font-bold text-white flex items-center gap-2 mt-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Direct Telegram Long-Polling (Auto-Reconnect)
+                  <span
+                    className={`w-2.5 h-2.5 rounded-full ${
+                      status?.pollingStatus?.conflictDetected
+                        ? 'bg-blue-400 animate-pulse'
+                        : status?.pollingStatus?.isPaused
+                        ? 'bg-amber-400'
+                        : 'bg-emerald-400 animate-pulse'
+                    }`}
+                  />
+                  {status?.pollingStatus?.conflictDetected
+                    ? '24/7 Cloud Bot Live (Railway/Render)'
+                    : status?.pollingStatus?.isPaused
+                    ? 'Local Polling Paused'
+                    : 'Direct Telegram Long-Polling (Auto-Reconnect)'}
                 </div>
                 <div className="text-xs text-slate-400 mt-1">
-                  Database: <span className="text-blue-300 font-medium">{status?.storage?.type || 'Persistent Local File Store'}</span>
+                  {status?.pollingStatus?.conflictDetected
+                    ? 'Your production deployment is online and actively handling user trades on Telegram.'
+                    : `Database: ${status?.storage?.type || 'Persistent Local File Store'}`}
                 </div>
               </div>
-              {status?.botInfo && (
-                <a
-                  href={`https://t.me/${status.botInfo.username}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-2"
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleTogglePolling}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs px-3.5 py-2.5 rounded-xl border border-slate-700 transition"
                 >
-                  <Send className="w-4 h-4" /> Open @{status.botInfo.username} on Telegram
-                </a>
-              )}
+                  {status?.pollingStatus?.isPaused ? '▶️ Resume Local Polling' : '⏸️ Pause Local Polling'}
+                </button>
+                {status?.botInfo && (
+                  <a
+                    href={`https://t.me/${status.botInfo.username}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-2"
+                  >
+                    <Send className="w-4 h-4" /> Open @{status.botInfo.username} on Telegram
+                  </a>
+                )}
+              </div>
             </div>
 
             {/* Hosting Options Grid */}

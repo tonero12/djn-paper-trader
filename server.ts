@@ -27,6 +27,12 @@ async function startServer() {
   const app = express();
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
+  // Polling state tracking
+  let isPollingActive = false;
+  let pollingConflictDetected = false;
+  let lastPollingError: string | null = null;
+  let pausePolling = false;
+
   // Standard middleware
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true }));
@@ -70,9 +76,31 @@ async function startServer() {
         gcpProject: config.gcpProjectId || 'none',
         databaseId: config.firestoreDatabaseId,
       },
+      pollingStatus: {
+        isActive: isPollingActive,
+        conflictDetected: pollingConflictDetected,
+        isPaused: pausePolling,
+        lastError: lastPollingError,
+      },
       quoteExpiryMs: config.quoteExpiryMs,
       materialPriceChangeThresholdPercent: config.materialPriceChangeThresholdPercent,
     });
+  });
+
+  app.post('/api/bot/pause-polling', async (req: Request, res: Response) => {
+    pausePolling = true;
+    try {
+      await bot.stop();
+    } catch {}
+    isPollingActive = false;
+    res.json({ success: true, message: 'Local bot polling paused. Live cloud instance can run without 409 conflict.' });
+  });
+
+  app.post('/api/bot/resume-polling', (req: Request, res: Response) => {
+    pausePolling = false;
+    pollingConflictDetected = false;
+    lastPollingError = null;
+    res.json({ success: true, message: 'Local bot polling resumed.' });
   });
 
   // ==========================================
@@ -436,19 +464,45 @@ async function startServer() {
           let reconnectDelay = 2000;
           const runPollingSupervisor = async () => {
             while (true) {
+              if (pausePolling) {
+                isPollingActive = false;
+                await new Promise((resolve) => setTimeout(resolve, 5000));
+                continue;
+              }
+
               try {
                 console.log('[DJN Paper Trader] Connecting to Telegram long polling stream...');
+                isPollingActive = true;
+                pollingConflictDetected = false;
+                lastPollingError = null;
+
                 await bot.start({
                   drop_pending_updates: false,
                   onStart: (botInfo) => {
                     reconnectDelay = 2000; // Reset backoff on successful connection
+                    isPollingActive = true;
+                    pollingConflictDetected = false;
+                    lastPollingError = null;
                     console.log(`[DJN Paper Trader] ✅ Telegram bot @${botInfo.username} (ID: ${botInfo.id}) is actively listening!`);
                   },
                 });
               } catch (err: any) {
-                console.error(`[DJN Paper Trader] Telegram bot connection dropped: ${err?.message || err}. Reconnecting in ${reconnectDelay / 1000}s...`);
-                await new Promise((resolve) => setTimeout(resolve, reconnectDelay));
-                reconnectDelay = Math.min(reconnectDelay * 1.5, 30000); // Exponential backoff capped at 30s
+                isPollingActive = false;
+                const errStr = String(err?.message || err);
+                const isConflict = errStr.includes('409') || errStr.includes('Conflict');
+
+                if (isConflict) {
+                  pollingConflictDetected = true;
+                  lastPollingError = 'Telegram 409 Conflict: Another instance of this bot is already active and handling updates (e.g. your deployed cloud instance on Railway/Render). Local polling is standing by.';
+                  console.warn(`[DJN Paper Trader] ℹ️ Another bot instance is actively handling Telegram updates (e.g. your live Railway/Render deployment). Standing by for 60s to prevent conflict...`);
+                  // Sleep for 60 seconds so we don't fight the live cloud server
+                  await new Promise((resolve) => setTimeout(resolve, 60000));
+                } else {
+                  lastPollingError = errStr;
+                  console.error(`[DJN Paper Trader] Telegram bot connection dropped: ${errStr}. Reconnecting in ${reconnectDelay / 1000}s...`);
+                  await new Promise((resolve) => setTimeout(resolve, reconnectDelay));
+                  reconnectDelay = Math.min(reconnectDelay * 1.5, 30000); // Exponential backoff capped at 30s
+                }
               }
             }
           };
