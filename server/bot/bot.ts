@@ -166,6 +166,147 @@ bot.command('positions', async (ctx) => {
 });
 
 /**
+ * /portfolio command (alias for /positions)
+ */
+bot.command('portfolio', async (ctx) => {
+  await handlePositionsView(ctx);
+});
+
+/**
+ * /sell command:
+ * Usage:
+ * /sell -> shows open positions with one-click sell buttons
+ * /sell <symbol> [25% | 50% | 100% | all] -> e.g. /sell PEPE 50%
+ */
+bot.command('sell', async (ctx) => {
+  const telegramId = ctx.from?.id;
+  if (!telegramId) return;
+
+  const session = await storage.getActiveSession(telegramId);
+  const openPositions = await storage.getOpenPositions(telegramId, session?.sessionId);
+
+  if (openPositions.length === 0) {
+    await ctx.reply(
+      '📊 <b>No Open Positions to Sell</b>\n\nYou currently have no open paper trading positions. Paste a token contract address or DEX Screener URL to buy tokens first!',
+      {
+        parse_mode: 'HTML',
+        reply_markup: new InlineKeyboard().text('🔎 Buy Token', 'm:find').text('🔙 Main Menu', 'm:menu'),
+      }
+    );
+    return;
+  }
+
+  const text = ctx.message?.text?.trim() || '';
+  const parts = text.split(/\s+/).slice(1);
+
+  if (parts.length > 0) {
+    const targetSymbolOrAddr = parts[0].toLowerCase();
+    const matchedPosition = openPositions.find(
+      (p) =>
+        p.symbol.toLowerCase() === targetSymbolOrAddr ||
+        p.tokenAddress.toLowerCase() === targetSymbolOrAddr ||
+        p.tokenName.toLowerCase().includes(targetSymbolOrAddr)
+    );
+
+    if (matchedPosition) {
+      let fraction = '1.00';
+      if (parts.length > 1) {
+        const fracStr = parts[1].toLowerCase().replace('%', '');
+        if (fracStr === '25' || fracStr === '0.25') fraction = '0.25';
+        else if (fracStr === '50' || fracStr === '0.50' || fracStr === 'half') fraction = '0.50';
+        else if (fracStr === '75' || fracStr === '0.75') fraction = '0.75';
+        else if (fracStr === '100' || fracStr === '1.00' || fracStr === 'all') fraction = '1.00';
+      }
+      await handleSellPreview(ctx, matchedPosition.positionId, fraction);
+      return;
+    }
+  }
+
+  // If no arguments or not matched, show interactive menu for each open position
+  let msg = `📉 <b>Select an Open Position to Sell:</b>\n\n`;
+  const kb = new InlineKeyboard();
+
+  for (const pos of openPositions) {
+    msg += `• <b>${escapeHtml(pos.symbol)}</b> (${pos.chain.toUpperCase()}): <code>${formatQuantity(pos.remainingQuantity)}</code> remaining\n`;
+    kb.text(`Sell 50% ${pos.symbol}`, `sp:0.50:${pos.positionId}`)
+      .text(`Sell 100% ${pos.symbol}`, `sp:1.00:${pos.positionId}`)
+      .row();
+  }
+
+  kb.text('📊 View All Positions', 'm:pos').text('🔙 Main Menu', 'm:menu');
+
+  await ctx.reply(msg, {
+    parse_mode: 'HTML',
+    reply_markup: kb,
+  });
+});
+
+/**
+ * /pnl command:
+ * Usage:
+ * /pnl -> shows open positions with one-click PnL card generators
+ * /pnl <symbol> -> directly generates high-resolution PnL card for that token
+ */
+bot.command('pnl', async (ctx) => {
+  const telegramId = ctx.from?.id;
+  if (!telegramId) return;
+
+  const session = await storage.getActiveSession(telegramId);
+  const openPositions = await storage.getOpenPositions(telegramId, session?.sessionId);
+
+  if (openPositions.length === 0) {
+    await ctx.reply(
+      '🖼️ <b>No Positions for P&L Card</b>\n\nYou currently have no open positions. Open a paper trade first using /buy or paste a token address!',
+      {
+        parse_mode: 'HTML',
+        reply_markup: new InlineKeyboard().text('🔎 Buy Token', 'm:find').text('🔙 Main Menu', 'm:menu'),
+      }
+    );
+    return;
+  }
+
+  const text = ctx.message?.text?.trim() || '';
+  const parts = text.split(/\s+/).slice(1);
+
+  if (parts.length > 0) {
+    const targetSymbolOrAddr = parts[0].toLowerCase();
+    const matchedPosition = openPositions.find(
+      (p) =>
+        p.symbol.toLowerCase() === targetSymbolOrAddr ||
+        p.tokenAddress.toLowerCase() === targetSymbolOrAddr ||
+        p.tokenName.toLowerCase().includes(targetSymbolOrAddr)
+    );
+
+    if (matchedPosition) {
+      await handleSharePnlCard(ctx, matchedPosition.positionId);
+      return;
+    }
+  }
+
+  // If single position, generate card right away!
+  if (openPositions.length === 1) {
+    await handleSharePnlCard(ctx, openPositions[0].positionId);
+    return;
+  }
+
+  // Multiple positions: prompt user to pick which token
+  let msg = `🎨 <b>Select a Position to Generate P&L Card:</b>\n\n`;
+  const kb = new InlineKeyboard();
+
+  for (const pos of openPositions) {
+    msg += `• <b>${escapeHtml(pos.symbol)}</b> (${pos.chain.toUpperCase()})\n`;
+    kb.text(`🖼️ P&L Card: ${pos.symbol}`, `card:${pos.positionId}`).row();
+  }
+
+  kb.text('📊 View Positions', 'm:pos').text('🔙 Main Menu', 'm:menu');
+
+  await ctx.reply(msg, {
+    parse_mode: 'HTML',
+    reply_markup: kb,
+  });
+});
+
+/**
  * /history command
  */
 bot.command('history', async (ctx) => {
@@ -342,7 +483,7 @@ bot.on('callback_query:data', async (ctx) => {
   // 6. Position Detail: p:<posId>
   if (data.startsWith('p:')) {
     const posId = data.substring(2);
-    await handleSinglePositionView(ctx, posId);
+    await handleSinglePositionView(ctx, posId, true);
     return;
   }
 
@@ -588,14 +729,18 @@ async function handlePositionsView(ctx: any, isEdit: boolean = false) {
   const telegramId = ctx.from.id;
   const session = await storage.getActiveSession(telegramId);
   const user = await storage.getUser(telegramId);
-  if (!session || !user) return;
+  if (!user) return;
 
-  const positions = await storage.getOpenPositions(telegramId, session.sessionId);
+  const positions = await storage.getOpenPositions(telegramId, session?.sessionId);
   if (positions.length === 0) {
-    const text = '📊 <b>Open Positions: None</b>\n\nYou currently have no open paper trading positions. Paste a contract address to make your first trade!';
+    const text = '📊 <b>Open Positions: None</b>\n\nYou currently have no open paper trading positions. Paste a contract address or DEX Screener URL to make your first trade!';
     const kb = new InlineKeyboard().text('🔎 Buy Token', 'm:find').text('🔙 Main Menu', 'm:menu');
     if (isEdit) {
-      await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb });
+      try {
+        await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb });
+      } catch {
+        await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb });
+      }
     } else {
       await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb });
     }
@@ -622,19 +767,33 @@ async function handlePositionsView(ctx: any, isEdit: boolean = false) {
   kb.text('🔄 Refresh Prices', 'm:pos').text('🔙 Main Menu', 'm:menu');
 
   if (isEdit) {
-    await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb });
+    try {
+      await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb });
+    } catch {
+      // Content identical; ignore error
+    }
   } else {
     await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb });
   }
 }
 
-async function handleSinglePositionView(ctx: any, positionId: string) {
+async function handleSinglePositionView(ctx: any, positionId: string, isEdit: boolean = false) {
   const telegramId = ctx.from.id;
   const user = await storage.getUser(telegramId);
   const position = await storage.getPosition(positionId);
 
   if (!position || position.telegramId !== telegramId) {
-    await ctx.reply('❌ Position not found.');
+    const text = '❌ Position not found or already closed.';
+    const kb = new InlineKeyboard().text('📊 All Positions', 'm:pos').text('🔙 Main Menu', 'm:menu');
+    if (isEdit) {
+      try {
+        await ctx.editMessageText(text, { reply_markup: kb });
+      } catch {
+        await ctx.reply(text, { reply_markup: kb });
+      }
+    } else {
+      await ctx.reply(text, { reply_markup: kb });
+    }
     return;
   }
 
@@ -668,7 +827,15 @@ async function handleSinglePositionView(ctx: any, positionId: string) {
     .text('📊 All Positions', 'm:pos')
     .text('🔙 Main Menu', 'm:menu');
 
-  await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb });
+  if (isEdit) {
+    try {
+      await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb });
+    } catch {
+      // Content identical; ignore error
+    }
+  } else {
+    await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb });
+  }
 }
 
 async function handleSellPreview(ctx: any, positionId: string, sellFraction: string) {

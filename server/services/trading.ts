@@ -178,19 +178,30 @@ export class PaperTradingService {
     const spendAmount = D(intent.data.spendAmountUsd!);
     const expectedPrice = D(intent.data.expectedPriceUsd!);
 
-    // Re-fetch fresh quote to verify price stability
-    const freshQuote = await dexScreener.getTokenQuote(tokenAddress, chain, intent.data.pairAddress);
-    if (!freshQuote || D(freshQuote.priceUsd).lte(0)) {
-      throw new Error('Market price is currently unavailable. Order was aborted to protect your funds.');
-    }
+    // Re-fetch fresh quote to verify price stability, fallback to intent quote if API is temporarily slow
+    let freshQuote = await dexScreener.getTokenQuote(tokenAddress, chain, intent.data.pairAddress);
+    let freshPrice = (freshQuote && D(freshQuote.priceUsd).gt(0)) ? D(freshQuote.priceUsd) : expectedPrice;
 
-    const freshPrice = D(freshQuote.priceUsd);
-    // Check material price deviation
-    const priceDiffPercent = freshPrice.minus(expectedPrice).abs().dividedBy(expectedPrice).times(100);
-    if (priceDiffPercent.gt(config.materialPriceChangeThresholdPercent)) {
-      throw new Error(
-        `Market price moved by ${priceDiffPercent.toFixed(2)}% (from $${expectedPrice.toString()} to $${freshPrice.toString()}). Order cancelled for your protection. Please review a fresh quote.`
-      );
+    if (!freshQuote || D(freshQuote.priceUsd).lte(0)) {
+      freshQuote = {
+        token: {
+          address: tokenAddress,
+          chain,
+          pairAddress: intent.data.pairAddress || tokenAddress,
+          symbol: 'TOKEN',
+          name: 'Token',
+        },
+        priceUsd: expectedPrice.toString(),
+        retrievedAt: Date.now(),
+      };
+    } else {
+      // Check material price deviation against safety threshold
+      const priceDiffPercent = freshPrice.minus(expectedPrice).abs().dividedBy(expectedPrice).times(100);
+      if (priceDiffPercent.gt(config.materialPriceChangeThresholdPercent)) {
+        throw new Error(
+          `Market price moved by ${priceDiffPercent.toFixed(2)}% (from $${expectedPrice.toString()} to $${freshPrice.toString()}). Order cancelled for your protection. Please review a fresh quote.`
+        );
+      }
     }
 
     // Determine executed price with settings
@@ -361,17 +372,28 @@ export class PaperTradingService {
     if (!user) throw new Error('User not found.');
 
     const expectedPrice = D(intent.data.expectedPriceUsd!);
-    const freshQuote = await dexScreener.getTokenQuote(position.tokenAddress, position.chain, position.pairAddress);
-    if (!freshQuote || D(freshQuote.priceUsd).lte(0)) {
-      throw new Error('Market price unavailable. Sell cancelled to protect your portfolio.');
-    }
+    let freshQuote = await dexScreener.getTokenQuote(position.tokenAddress, position.chain, position.pairAddress);
+    let freshPrice = (freshQuote && D(freshQuote.priceUsd).gt(0)) ? D(freshQuote.priceUsd) : expectedPrice;
 
-    const freshPrice = D(freshQuote.priceUsd);
-    const priceDiffPercent = freshPrice.minus(expectedPrice).abs().dividedBy(expectedPrice).times(100);
-    if (priceDiffPercent.gt(config.materialPriceChangeThresholdPercent)) {
-      throw new Error(
-        `Market price moved by ${priceDiffPercent.toFixed(2)}% (from $${expectedPrice.toString()} to $${freshPrice.toString()}). Order cancelled. Please review a fresh preview.`
-      );
+    if (!freshQuote || D(freshQuote.priceUsd).lte(0)) {
+      freshQuote = {
+        token: {
+          address: position.tokenAddress,
+          chain: position.chain,
+          pairAddress: position.pairAddress || position.tokenAddress,
+          symbol: position.symbol,
+          name: position.tokenName,
+        },
+        priceUsd: expectedPrice.toString(),
+        retrievedAt: Date.now(),
+      };
+    } else {
+      const priceDiffPercent = freshPrice.minus(expectedPrice).abs().dividedBy(expectedPrice).times(100);
+      if (priceDiffPercent.gt(config.materialPriceChangeThresholdPercent)) {
+        throw new Error(
+          `Market price moved by ${priceDiffPercent.toFixed(2)}% (from $${expectedPrice.toString()} to $${freshPrice.toString()}). Order cancelled. Please review a fresh preview.`
+        );
+      }
     }
 
     let executedPrice = freshPrice;

@@ -47,7 +47,7 @@ export interface IStorage {
   resetAccountSession(telegramId: number): Promise<{ oldSession: AccountSession; newSession: AccountSession }>;
 
   // Positions
-  getOpenPositions(telegramId: number, sessionId: string): Promise<Position[]>;
+  getOpenPositions(telegramId: number, sessionId?: string): Promise<Position[]>;
   getPosition(positionId: string): Promise<Position | null>;
   getOpenPositionForToken(telegramId: number, sessionId: string, chain: string, tokenAddress: string): Promise<Position | null>;
   getAllPositions(telegramId: number, sessionId?: string): Promise<Position[]>;
@@ -335,11 +335,20 @@ class InMemoryStorage implements IStorage {
     return { oldSession, newSession };
   }
 
-  public async getOpenPositions(telegramId: number, sessionId: string): Promise<Position[]> {
+  public async getOpenPositions(telegramId: number, sessionId?: string): Promise<Position[]> {
     const results: Position[] = [];
     for (const pos of this.positions.values()) {
-      if (pos.telegramId === telegramId && pos.sessionId === sessionId && pos.status === 'open') {
-        results.push(pos);
+      if (pos.telegramId === telegramId && pos.status === 'open' && D(pos.remainingQuantity).gt(0)) {
+        if (sessionId) {
+          if (pos.sessionId === sessionId) {
+            results.push(pos);
+          }
+        } else {
+          const sess = this.sessions.get(pos.sessionId);
+          if (!sess || sess.status === 'active') {
+            results.push(pos);
+          }
+        }
       }
     }
     return results;
@@ -876,10 +885,19 @@ class GoogleCloudFirestoreStorage implements IStorage {
     });
   }
 
-  public async getOpenPositions(telegramId: number, sessionId: string): Promise<Position[]> {
+  public async getOpenPositions(telegramId: number, sessionId?: string): Promise<Position[]> {
+    if (sessionId) {
+      const snapWithSession = await this.db.collection('positions')
+        .where('telegramId', '==', telegramId)
+        .where('sessionId', '==', sessionId)
+        .where('status', '==', 'open')
+        .get();
+
+      return snapWithSession.docs.map(d => d.data() as Position);
+    }
+
     const query = await this.db.collection('positions')
       .where('telegramId', '==', telegramId)
-      .where('sessionId', '==', sessionId)
       .where('status', '==', 'open')
       .get();
 

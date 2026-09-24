@@ -31,7 +31,7 @@ export const config: ServerConfig = {
   firestoreDatabaseId: process.env.FIRESTORE_DATABASE_ID || '(default)',
   firestoreEmulatorHost: process.env.FIRESTORE_EMULATOR_HOST || undefined,
   quoteExpiryMs: 30000, // 30 seconds
-  materialPriceChangeThresholdPercent: 2.0, // 2% price deviation triggers refresh warning
+  materialPriceChangeThresholdPercent: 15.0, // 15% price deviation allowance for volatile memecoins
 };
 
 /**
