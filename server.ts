@@ -482,10 +482,15 @@ async function startServer() {
                 pollingConflictDetected = false;
                 lastPollingError = null;
 
+                try {
+                  await bot.stop();
+                } catch {}
+
                 await bot.start({
                   drop_pending_updates: false,
+                  allowed_updates: ['message', 'callback_query'],
                   onStart: (botInfo) => {
-                    reconnectDelay = 2000; // Reset backoff on successful connection
+                    reconnectDelay = 2000;
                     isPollingActive = true;
                     pollingConflictDetected = false;
                     lastPollingError = null;
@@ -499,15 +504,20 @@ async function startServer() {
 
                 if (isConflict) {
                   pollingConflictDetected = true;
-                  lastPollingError = 'Telegram 409 Conflict: Another instance of this bot is already active and handling updates (e.g. your deployed cloud instance on Railway/Render). Local polling is standing by.';
-                  console.warn(`[DJN Paper Trader] ℹ️ Another bot instance is actively handling Telegram updates (e.g. your live Railway/Render deployment). Standing by for 60s to prevent conflict...`);
-                  // Sleep for 60 seconds so we don't fight the live cloud server
-                  await new Promise((resolve) => setTimeout(resolve, 60000));
+                  lastPollingError = 'Telegram 409 Conflict: Resetting connection stream...';
+                  console.warn(`[DJN Paper Trader] Telegram update conflict/reset detected. Clearing runner and retrying in 3s...`);
+                  try {
+                    await bot.stop();
+                  } catch {}
+                  await new Promise((resolve) => setTimeout(resolve, 3000));
                 } else {
                   lastPollingError = errStr;
                   console.error(`[DJN Paper Trader] Telegram bot connection dropped: ${errStr}. Reconnecting in ${reconnectDelay / 1000}s...`);
+                  try {
+                    await bot.stop();
+                  } catch {}
                   await new Promise((resolve) => setTimeout(resolve, reconnectDelay));
-                  reconnectDelay = Math.min(reconnectDelay * 1.5, 30000); // Exponential backoff capped at 30s
+                  reconnectDelay = Math.min(reconnectDelay * 1.5, 15000);
                 }
               }
             }
