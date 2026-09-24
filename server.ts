@@ -5,8 +5,13 @@
 
 import express, { Request, Response } from 'express';
 import path from 'path';
+import fs from 'fs';
+import { promisify } from 'util';
+import { exec } from 'child_process';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
+
+const execAsync = promisify(exec);
 import { bot } from './server/bot/bot.js';
 import { config, isBotConfigured } from './server/config.js';
 import { storage } from './server/storage/firestore.js';
@@ -265,6 +270,111 @@ async function startServer() {
       res.status(400).json({ error: 'Unknown simulator action' });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
+    }
+  });
+
+  // ==========================================
+  // Git & Project Export Endpoints
+  // ==========================================
+  app.get('/api/git/info', async (req: Request, res: Response) => {
+    try {
+      let branch = 'main';
+      let totalCommits = 0;
+      let latestCommit = { hash: '', author: '', message: '', date: '' };
+      let remoteUrl = '';
+
+      try {
+        const { stdout: branchOut } = await execAsync('git rev-parse --abbrev-ref HEAD');
+        branch = branchOut.trim();
+      } catch {}
+
+      try {
+        const { stdout: countOut } = await execAsync('git rev-list --count HEAD');
+        totalCommits = parseInt(countOut.trim(), 10) || 0;
+      } catch {}
+
+      try {
+        const { stdout: logOut } = await execAsync('git log -1 --pretty=format:"%h|%an|%s|%cd"');
+        const parts = logOut.trim().split('|');
+        if (parts.length >= 4) {
+          latestCommit = {
+            hash: parts[0],
+            author: parts[1],
+            message: parts[2],
+            date: parts[3],
+          };
+        }
+      } catch {}
+
+      try {
+        const { stdout: remOut } = await execAsync('git remote get-url origin');
+        remoteUrl = remOut.trim();
+      } catch {}
+
+      res.json({
+        initialized: true,
+        branch,
+        totalCommits,
+        latestCommit,
+        remoteUrl: remoteUrl.replace(/https:\/\/[^@]+@/g, 'https://***@'),
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/api/git/download', async (req: Request, res: Response) => {
+    try {
+      const zipPath = path.join('/tmp', `djn-paper-trader-${Date.now()}.zip`);
+      await execAsync(`git archive --format=zip -o "${zipPath}" HEAD`);
+      res.download(zipPath, 'djn-paper-trader.zip', (err) => {
+        try {
+          if (fs.existsSync(zipPath)) {
+            fs.unlinkSync(zipPath);
+          }
+        } catch {}
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to create export zip: ' + err.message });
+    }
+  });
+
+  app.post('/api/git/push', async (req: Request, res: Response) => {
+    try {
+      const { repoUrl, token, branch = 'main', force = false } = req.body;
+      if (!repoUrl || typeof repoUrl !== 'string') {
+        res.status(400).json({ error: 'GitHub repository URL is required (e.g. https://github.com/username/repo.git)' });
+        return;
+      }
+
+      let targetUrl = repoUrl.trim();
+      if (token && typeof token === 'string' && token.trim()) {
+        const cleanToken = token.trim();
+        if (targetUrl.startsWith('https://')) {
+          const withoutProto = targetUrl.replace('https://', '');
+          const cleanHostAndPath = withoutProto.includes('@') ? withoutProto.split('@')[1] : withoutProto;
+          targetUrl = `https://${encodeURIComponent(cleanToken)}@${cleanHostAndPath}`;
+        }
+      }
+
+      try {
+        await execAsync('git remote remove origin');
+      } catch {}
+
+      await execAsync(`git remote add origin "${targetUrl}"`);
+
+      const forceArg = force ? ' --force' : '';
+      const { stdout, stderr } = await execAsync(`git push -u origin ${branch}${forceArg}`);
+      const combined = (stdout + '\n' + stderr).replace(/https:\/\/[^@]+@/g, 'https://***@');
+
+      res.json({
+        success: true,
+        message: 'Successfully pushed code to GitHub!',
+        output: combined,
+      });
+    } catch (err: any) {
+      const safeError = (err?.message || String(err)).replace(/https:\/\/[^@]+@/g, 'https://***@');
+      res.status(500).json({ error: safeError });
     }
   });
 

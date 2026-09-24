@@ -17,6 +17,11 @@ import {
   Terminal,
   Layers,
   Award,
+  GitBranch,
+  Download,
+  UploadCloud,
+  Copy,
+  Check,
 } from 'lucide-react';
 
 interface BotStatus {
@@ -53,7 +58,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [searchAddr, setSearchAddr] = useState('');
   const [selectedChain, setSelectedChain] = useState<string>('solana');
-  const [activeTab, setActiveTab] = useState<'trade' | 'positions' | 'performance' | 'botguide' | 'hosting'>('trade');
+  const [activeTab, setActiveTab] = useState<'trade' | 'positions' | 'performance' | 'botguide' | 'hosting' | 'github'>('trade');
   const [quote, setQuote] = useState<any>(null);
   const [buySpend, setBuySpend] = useState('50');
   const [previewData, setPreviewData] = useState<any>(null);
@@ -61,11 +66,89 @@ export default function App() {
   const [cardUrl, setCardUrl] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  // Load Status and Overview on Mount
+  // GitHub & Export states
+  const [gitRepoUrl, setGitRepoUrl] = useState('');
+  const [gitToken, setGitToken] = useState('');
+  const [gitBranchName, setGitBranchName] = useState('main');
+  const [gitForce, setGitForce] = useState(false);
+  const [gitPushing, setGitPushing] = useState(false);
+  const [gitPushResult, setGitPushResult] = useState<{ success: boolean; message: string; output?: string } | null>(null);
+  const [gitInfo, setGitInfo] = useState<{
+    branch: string;
+    totalCommits: number;
+    latestCommit: { hash: string; author: string; message: string; date: string };
+    remoteUrl: string;
+  } | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Load Status, Overview and Git Info on Mount
   useEffect(() => {
     fetchStatus();
     fetchOverview();
+    fetchGitInfo();
   }, []);
+
+  const fetchGitInfo = async () => {
+    try {
+      const res = await fetch('/api/git/info');
+      const data = await res.json();
+      if (!data.error) {
+        setGitInfo(data);
+        if (data.remoteUrl && !gitRepoUrl) {
+          setGitRepoUrl(data.remoteUrl);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch git info', e);
+    }
+  };
+
+  const copyToClipboard = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2500);
+  };
+
+  const handleGitPush = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!gitRepoUrl.trim()) {
+      setNotice('Please enter your GitHub repository URL.');
+      return;
+    }
+    setGitPushing(true);
+    setGitPushResult(null);
+    try {
+      const res = await fetch('/api/git/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repoUrl: gitRepoUrl.trim(),
+          token: gitToken.trim(),
+          branch: gitBranchName.trim() || 'main',
+          force: gitForce,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to push to GitHub');
+      }
+      setGitPushResult({
+        success: true,
+        message: data.message || 'Pushed successfully!',
+        output: data.output,
+      });
+      fetchGitInfo();
+      setNotice('🎉 Pushed cleanly to GitHub repository!');
+    } catch (err: any) {
+      setGitPushResult({
+        success: false,
+        message: err.message,
+      });
+      setNotice(`❌ Push error: ${err.message}`);
+    } finally {
+      setGitPushing(false);
+    }
+  };
 
   const fetchStatus = async () => {
     try {
@@ -368,6 +451,14 @@ export default function App() {
           }`}
         >
           <ShieldCheck className="w-4 h-4" /> 24/7 Hosting &amp; Keep-Online
+        </button>
+        <button
+          onClick={() => setActiveTab('github')}
+          className={`py-3 font-semibold border-b-2 transition flex items-center gap-2 ${
+            activeTab === 'github' ? 'border-purple-500 text-purple-400' : 'border-transparent text-slate-400 hover:text-white'
+          }`}
+        >
+          <GitBranch className="w-4 h-4" /> Push to GitHub
         </button>
       </div>
 
@@ -1101,6 +1192,227 @@ npx pm2 start dist/server.js --name "djn-bot"
               </div>
               <p className="text-[11px] text-slate-400">
                 Note: External pingers can keep web servers warm, but dedicated cloud hosting (Option 1 or 2) provides the most reliable 24/7 uptime for instant Telegram message delivery.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Push to GitHub & Export Center */}
+        {activeTab === 'github' && (
+          <div className="max-w-4xl mx-auto space-y-6">
+            {/* Git Status Card */}
+            <div className="bg-gradient-to-r from-purple-950/60 to-[#151B26] border border-purple-500/40 rounded-2xl p-6 shadow-xl space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-400 animate-pulse" />
+                    <span className="text-xs font-semibold text-purple-400 uppercase tracking-wider">
+                      Local Git Repository Ready
+                    </span>
+                  </div>
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                    <GitBranch className="w-5 h-5 text-purple-400" />
+                    Branch: {gitInfo?.branch || 'main'}
+                  </h2>
+                  <p className="text-xs text-slate-300 mt-1">
+                    {gitInfo?.latestCommit?.message
+                      ? `Latest Commit: "${gitInfo.latestCommit.message}" (${gitInfo.latestCommit.hash})`
+                      : 'All project code, tests, and configuration files are tracked in Git.'}
+                  </p>
+                </div>
+
+                <a
+                  href="/api/git/download"
+                  download="djn-paper-trader.zip"
+                  className="inline-flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500 text-white font-semibold px-5 py-3 rounded-xl shadow-lg transition text-xs whitespace-nowrap"
+                >
+                  <Download className="w-4 h-4" />
+                  Download Code (.zip)
+                </a>
+              </div>
+
+              {/* Security Shield Note */}
+              <div className="flex items-start gap-3 bg-[#0E1217]/70 p-3.5 rounded-xl border border-purple-800/30 text-xs text-slate-300">
+                <ShieldCheck className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <span className="text-emerald-400 font-semibold">Security Guard Active: </span>
+                  Your <code>.env</code> file containing your secret Telegram Bot Token is excluded by <code>.gitignore</code>. Your personal bot token will never be uploaded to GitHub.
+                </div>
+              </div>
+            </div>
+
+            {/* Push Directly to GitHub Form */}
+            <div className="bg-[#151B26] border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+              <div className="flex items-center gap-2.5 text-base font-bold text-white">
+                <UploadCloud className="w-5 h-5 text-blue-400" />
+                Push Directly to GitHub
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Enter your GitHub repository URL and a Personal Access Token below to push this codebase directly to your repository in one step.
+              </p>
+
+              <form onSubmit={handleGitPush} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    GitHub Repository URL <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={gitRepoUrl}
+                    onChange={(e) => setGitRepoUrl(e.target.value)}
+                    placeholder="https://github.com/your-username/djn-paper-trader.git"
+                    className="w-full bg-[#0E1217] border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 font-mono"
+                    required
+                  />
+                  <div className="text-[11px] text-slate-500 mt-1">
+                    Create an empty repository on GitHub first at <a href="https://github.com/new" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">github.com/new</a> (do not initialize with README or license).
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+                    <span>GitHub Personal Access Token (PAT)</span>
+                    <a
+                      href="https://github.com/settings/tokens/new?scopes=repo"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-purple-400 hover:underline text-[11px] flex items-center gap-1 font-normal"
+                    >
+                      <ExternalLink className="w-3 h-3" /> Generate token on GitHub (scope: repo)
+                    </a>
+                  </label>
+                  <input
+                    type="password"
+                    value={gitToken}
+                    onChange={(e) => setGitToken(e.target.value)}
+                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                    className="w-full bg-[#0E1217] border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 font-mono"
+                  />
+                  <div className="text-[11px] text-slate-500 mt-1">
+                    GitHub requires a Personal Access Token instead of your password for HTTPS git pushes.
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Target Branch
+                    </label>
+                    <input
+                      type="text"
+                      value={gitBranchName}
+                      onChange={(e) => setGitBranchName(e.target.value)}
+                      placeholder="main"
+                      className="w-full bg-[#0E1217] border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-6">
+                    <input
+                      type="checkbox"
+                      id="forcePush"
+                      checked={gitForce}
+                      onChange={(e) => setGitForce(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-700 text-purple-600 focus:ring-purple-500 bg-[#0E1217]"
+                    />
+                    <label htmlFor="forcePush" className="text-xs text-slate-300 cursor-pointer">
+                      Force push (overwrite remote history if exists)
+                    </label>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={gitPushing || !gitRepoUrl.trim()}
+                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-semibold py-3 rounded-xl shadow-lg transition text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {gitPushing ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Pushing to GitHub...
+                    </>
+                  ) : (
+                    <>
+                      <UploadCloud className="w-4 h-4" />
+                      Push to GitHub Now
+                    </>
+                  )}
+                </button>
+              </form>
+
+              {/* Push Result Banner */}
+              {gitPushResult && (
+                <div
+                  className={`p-4 rounded-xl border text-xs space-y-2 ${
+                    gitPushResult.success
+                      ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-200'
+                      : 'bg-rose-950/60 border-rose-500/50 text-rose-200'
+                  }`}
+                >
+                  <div className="font-bold flex items-center gap-2">
+                    {gitPushResult.success ? (
+                      <CheckCircle className="w-4 h-4 text-emerald-400" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-rose-400" />
+                    )}
+                    {gitPushResult.message}
+                  </div>
+                  {gitPushResult.output && (
+                    <pre className="bg-[#0E1217] p-2.5 rounded font-mono text-[11px] overflow-x-auto text-slate-300">
+                      {gitPushResult.output}
+                    </pre>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Manual CLI Push Commands */}
+            <div className="bg-[#151B26] border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5 text-base font-bold text-white">
+                  <Terminal className="w-5 h-5 text-emerald-400" />
+                  Or Push Using Your Computer's Terminal
+                </div>
+                <button
+                  onClick={() =>
+                    copyToClipboard(
+                      `git remote add origin ${gitRepoUrl || 'https://github.com/YOUR_USERNAME/YOUR_REPO.git'}\ngit branch -M main\ngit push -u origin main`,
+                      'cli-commands'
+                    )
+                  }
+                  className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition"
+                >
+                  {copiedKey === 'cli-commands' ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" /> Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" /> Copy Commands
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-300 leading-relaxed">
+                If you downloaded the code or have git configured locally on your laptop, run these standard git commands:
+              </p>
+
+              <pre className="bg-[#0E1217] p-4 rounded-xl font-mono text-xs text-emerald-400 border border-slate-800 overflow-x-auto space-y-1">
+                <div>git remote add origin {gitRepoUrl || 'https://github.com/YOUR_USERNAME/YOUR_REPO.git'}</div>
+                <div>git branch -M main</div>
+                <div>git push -u origin main</div>
+              </pre>
+            </div>
+
+            {/* Next Steps: 24/7 Cloud Host */}
+            <div className="bg-[#151B26] border border-slate-800 rounded-2xl p-6 shadow-xl space-y-3">
+              <div className="text-sm font-bold text-white flex items-center gap-2">
+                <Activity className="w-4 h-4 text-blue-400" />
+                What to do after pushing to GitHub:
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Once your code is on GitHub, you can link it to <b>Railway</b> or <b>Render</b> with one click. They will automatically build and keep your Telegram bot running 24/7 in the cloud so you can close this window and trade anytime from Telegram!
               </p>
             </div>
           </div>
