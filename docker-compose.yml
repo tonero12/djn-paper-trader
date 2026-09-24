@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  djn-paper-trader:
+    build: .
+    container_name: djn-paper-trader
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-8863471433:AAE6MtZF8cilY-3i3TpgOr2npM1FXIKiZXw}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-}
+    volumes:
+      - ./data:/app/data

@@ -1,0 +1,6 @@
+{
+  "name": "DJN Paper Trader",
+  "description": "Telegram memecoin paper trading bot with real-time DEX Screener market data, deterministic decimal accounting, and graphical P&L card generation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
